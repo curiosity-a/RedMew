@@ -12,6 +12,7 @@ local Global = require 'utils.global'
 local CreateParticles = require 'features.create_particles'
 local RS = require 'map_gen.shared.redmew_surface'
 local Popup = require 'features.gui.popup'
+local Overlay = require 'features.gui.map_overlay'
 local table = require 'utils.table'
 local random = math.random
 local floor = math.floor
@@ -79,6 +80,16 @@ Global.register(
         collapse_positions_storage = tbl.collapse_positions_storage
     end
 )
+
+local stress_overlay_name = 'diggy-stress'
+Overlay.register_toggleable_overlay(stress_overlay_name, {'diggy.stress_overlay_caption'})
+local rendering_draw_text = rendering.draw_text
+local text_color = {r = 0, g = 0, b = 0} -- values don't matter
+local text_position = {x = 0, y = 0} -- values don't matter
+local draw_text_args = {alignment = 'center', color = text_color, target = text_position}
+local rendering_set_text = rendering.set_text
+local rendering_set_color = rendering.set_color
+local stress_color_scale = 2 / stress_threshold_causing_collapse
 
 local defaultValue = 0
 local collapse_alert = {type = 'item', name = 'stone'}
@@ -501,7 +512,34 @@ local function add_fraction(stress_map, x, y, fraction, player_index, surface)
         end
     end
     if enable_stress_grid then
-        Debug.print_colored_grid_value(value, surface, {x = x, y = y}, 0.5, false, value / stress_threshold_causing_collapse, {r = 0, g = 1, b = 0}, {r = 1, g = -1, b = 0}, {r = 0, g = 1, b = 0}, {r = 1, g = 1, b = 1})
+        local gradient = value * stress_color_scale
+        if gradient >=2  then
+            text_color.r = 1
+            text_color.g = 1
+            text_color.b = 1
+        elseif gradient > 1 then
+            text_color.r = 1
+            text_color.g = 2 - gradient
+            text_color.b = 0
+        elseif gradient > 0 then
+            text_color.r = gradient
+            text_color.g = 1
+            text_color.b = 0
+        else
+            text_color.r = 0
+            text_color.g = 1
+            text_color.b = 0
+        end
+        draw_text_args.surface = surface
+        local text = string.format('%.2f', value)
+        draw_text_args.text = text
+        text_position.x = x + 1
+        text_position.y = y + 0.7
+        local text_id, was_created = Overlay.get_or_create_grid_object(stress_overlay_name, surface.index, x, y, rendering_draw_text, draw_text_args)
+        if not was_created then
+            rendering_set_text(text_id, text)
+            rendering_set_color(text_id, text_color)
+        end
     end
     return value
 end
